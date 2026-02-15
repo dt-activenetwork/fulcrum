@@ -15,6 +15,7 @@ import { useProjects } from '@/hooks/use-projects'
 import { cn } from '@/lib/utils'
 import { fuzzyScore } from '@/lib/fuzzy-search'
 import type { TaskStatus } from '@/types'
+import { getTaskType, type TaskType } from '../../../shared/types'
 
 const COLUMNS: TaskStatus[] = [
   'TO_DO',
@@ -63,10 +64,12 @@ interface KanbanBoardProps {
   projectFilter?: string | null // 'inbox' for tasks without project, or project ID
   searchQuery?: string
   tagsFilter?: string[]
+  taskTypesFilter?: TaskType[]
+  showTypeLabels?: boolean
   selectedTaskId?: string // task ID for manual task modal (from URL param)
 }
 
-function KanbanBoardInner({ projectFilter, searchQuery, tagsFilter, selectedTaskId }: KanbanBoardProps) {
+function KanbanBoardInner({ projectFilter, searchQuery, tagsFilter, taskTypesFilter, showTypeLabels, selectedTaskId }: KanbanBoardProps) {
   const { t } = useTranslation('common')
   const navigate = useNavigate()
   const { data: allTasks = [], isLoading } = useTasks()
@@ -191,6 +194,13 @@ function KanbanBoardInner({ projectFilter, searchQuery, tagsFilter, selectedTask
       )
     }
 
+    // Filter by task type (OR logic - show tasks matching ANY selected type)
+    if (taskTypesFilter && taskTypesFilter.length > 0) {
+      filtered = filtered.filter((t) =>
+        taskTypesFilter.includes(getTaskType(t))
+      )
+    }
+
     if (searchQuery?.trim()) {
       // When searching, sort by fuzzy score
       filtered = filtered
@@ -224,7 +234,7 @@ function KanbanBoardInner({ projectFilter, searchQuery, tagsFilter, selectedTask
       })
     }
     return filtered
-  }, [allTasks, projectFilter, searchQuery, tagsFilter, projectRepoIds, projectRepoPaths, selectedProjectRepoIds, selectedProjectRepoPaths])
+  }, [allTasks, projectFilter, searchQuery, tagsFilter, taskTypesFilter, projectRepoIds, projectRepoPaths, selectedProjectRepoIds, selectedProjectRepoPaths])
 
   // Task counts for tabs
   const taskCounts = useMemo(() => {
@@ -368,6 +378,7 @@ function KanbanBoardInner({ projectFilter, searchQuery, tagsFilter, selectedTask
             tasks={tasks.filter((t) => t.status === status)}
             blockedTaskIds={blockedTaskIds}
             blockingTaskIds={blockingTaskIds}
+            showTypeLabels={showTypeLabels}
           />
         ))}
       </div>
@@ -380,6 +391,7 @@ function KanbanBoardInner({ projectFilter, searchQuery, tagsFilter, selectedTask
           isMobile
           blockedTaskIds={blockedTaskIds}
           blockingTaskIds={blockingTaskIds}
+          showTypeLabels={showTypeLabels}
         />
       </div>
 

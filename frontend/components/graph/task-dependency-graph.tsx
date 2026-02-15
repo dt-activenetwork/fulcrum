@@ -19,6 +19,7 @@ import { useProjects } from '@/hooks/use-projects'
 import { useIsOverdue, useIsDueToday } from '@/hooks/use-date-utils'
 import type { TaskStatus } from '@/types'
 import { parseDateKey } from '../../../shared/date-utils'
+import { getTaskType, type TaskType } from '../../../shared/types'
 import { ManualTaskModal } from '@/components/task/manual-task-modal'
 import 'reactflow/dist/style.css'
 
@@ -176,11 +177,12 @@ interface TaskDependencyGraphProps {
   className?: string
   projectFilter?: string | null
   tagsFilter?: string[]
+  taskTypesFilter?: TaskType[]
 }
 
 const MOBILE_BREAKPOINT = 768
 
-export function TaskDependencyGraph({ className, projectFilter, tagsFilter }: TaskDependencyGraphProps) {
+export function TaskDependencyGraph({ className, projectFilter, tagsFilter, taskTypesFilter }: TaskDependencyGraphProps) {
   const navigate = useNavigate()
   const { data: graphData, isLoading } = useTaskDependencyGraph()
   const { data: allTasks = [] } = useTasks()
@@ -311,10 +313,18 @@ export function TaskDependencyGraph({ className, projectFilter, tagsFilter }: Ta
   const { initialNodes, initialEdges } = useMemo((): { initialNodes: Node<TaskNodeData>[]; initialEdges: Edge[] } => {
     if (!graphData) return { initialNodes: [], initialEdges: [] }
 
+    // Helper to check if a task matches the task type filter
+    const taskMatchesTypeFilter = (task: TaskGraphNode): boolean => {
+      if (!taskTypesFilter || taskTypesFilter.length === 0) return true
+      const fullTask = taskMap.get(task.id)
+      if (!fullTask) return true
+      return taskTypesFilter.includes(getTaskType(fullTask))
+    }
+
     // First, determine which tasks match our filters
     const matchingTaskIds = new Set<string>()
     for (const task of graphData.nodes) {
-      if (taskMatchesProjectFilter(task) && taskMatchesTagsFilter(task)) {
+      if (taskMatchesProjectFilter(task) && taskMatchesTagsFilter(task) && taskMatchesTypeFilter(task)) {
         matchingTaskIds.add(task.id)
       }
     }
@@ -333,7 +343,7 @@ export function TaskDependencyGraph({ className, projectFilter, tagsFilter }: Ta
     }
 
     // If no filters are applied, show all nodes in dependency chains
-    const hasFilters = projectFilter || (tagsFilter && tagsFilter.length > 0)
+    const hasFilters = projectFilter || (tagsFilter && tagsFilter.length > 0) || (taskTypesFilter && taskTypesFilter.length > 0)
     if (!hasFilters) {
       for (const edge of graphData.edges) {
         nodesInFilteredChains.add(edge.source)
@@ -385,7 +395,7 @@ export function TaskDependencyGraph({ className, projectFilter, tagsFilter }: Ta
     // Apply automatic layout (LR on desktop, TB on mobile)
     const layouted = getLayoutedElements(nodes, edges, direction)
     return { initialNodes: layouted.nodes as Node<TaskNodeData>[], initialEdges: layouted.edges }
-  }, [graphData, blockedNodes, blockingNodes, direction, taskMatchesProjectFilter, taskMatchesTagsFilter, projectFilter, tagsFilter, projects])
+  }, [graphData, blockedNodes, blockingNodes, direction, taskMatchesProjectFilter, taskMatchesTagsFilter, projectFilter, tagsFilter, taskTypesFilter, taskMap, projects])
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)

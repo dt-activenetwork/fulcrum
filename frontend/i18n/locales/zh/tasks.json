@@ -8,6 +8,16 @@
   "clearTags": "清除所有标签",
   "searchProjects": "搜索项目...",
   "noProjectsFound": "未找到项目",
+  "typeFilter": {
+    "label": "类型",
+    "types": {
+      "worktree": "Git",
+      "scratch": "临时",
+      "manual": "手动"
+    },
+    "clear": "清除筛选",
+    "showLabels": "显示任务类型标签"
+  },
   "newTask": "新建任务",
   "priority": {
     "high": "高",

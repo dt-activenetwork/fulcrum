@@ -8,6 +8,16 @@
   "clearTags": "Clear all tags",
   "searchProjects": "Search projects...",
   "noProjectsFound": "No projects found",
+  "typeFilter": {
+    "label": "Type",
+    "types": {
+      "worktree": "Git",
+      "scratch": "Scratch",
+      "manual": "Manual"
+    },
+    "clear": "Clear filter",
+    "showLabels": "Show task type labels"
+  },
   "newTask": "New Task",
   "priority": {
     "high": "High",

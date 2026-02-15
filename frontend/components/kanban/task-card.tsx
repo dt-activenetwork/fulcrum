@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from '@tanstack/react-router'
+import { useTranslation } from 'react-i18next'
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { setCustomNativeDragPreview } from '@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview'
 import { pointerOutsideOfPreview } from '@atlaskit/pragmatic-drag-and-drop/element/pointer-outside-of-preview'
@@ -19,7 +20,6 @@ import { usePinTask } from '@/hooks/use-tasks'
 import { formatDateString } from '../../../shared/date-utils'
 import { useIsOverdue, useIsDueToday } from '@/hooks/use-date-utils'
 import { getTaskTypeCssVar } from '@/lib/task-type-colors'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { getTaskType } from '../../../shared/types'
 
 interface TaskCardProps {
@@ -27,9 +27,11 @@ interface TaskCardProps {
   isDragPreview?: boolean
   isBlocked?: boolean
   isBlocking?: boolean
+  showTypeLabel?: boolean
 }
 
-export function TaskCard({ task, isDragPreview, isBlocked, isBlocking }: TaskCardProps) {
+export function TaskCard({ task, isDragPreview, isBlocked, isBlocking, showTypeLabel }: TaskCardProps) {
+  const { t } = useTranslation('tasks')
   const { setActiveTask } = useDrag()
   const { isSelected, toggleSelection } = useSelection()
   const navigate = useNavigate()
@@ -206,16 +208,6 @@ export function TaskCard({ task, isDragPreview, isBlocked, isBlocking }: TaskCar
           selected && 'ring-2 ring-primary bg-primary/5'
         )}
       >
-        {/* Task type indicator dot */}
-        <Tooltip>
-          <TooltipTrigger
-            className="absolute bottom-2 right-2 h-1.5 w-1.5 rounded-full"
-            style={{ backgroundColor: getTaskTypeCssVar(task) }}
-          />
-          <TooltipContent side="right">
-            {getTaskType(task) === 'worktree' ? 'Git' : getTaskType(task) === 'scratch' ? 'Scratch' : 'Manual'}
-          </TooltipContent>
-        </Tooltip>
 
         {/* Drop indicator line */}
         {closestEdge && (
@@ -352,6 +344,16 @@ export function TaskCard({ task, isDragPreview, isBlocked, isBlocking }: TaskCar
             <span className="italic">Non-code task</span>
           )}
         </div>
+        {/* Task type label - always visible when toggled on, otherwise on hover */}
+        <span
+          className={cn(
+            'absolute bottom-1.5 right-2 text-[10px] font-medium transition-opacity duration-200',
+            showTypeLabel ? 'opacity-100' : 'opacity-0 group-hover/card:opacity-100'
+          )}
+          style={{ color: getTaskTypeCssVar(task) }}
+        >
+          {t(`typeFilter.types.${getTaskType(task)}`)}
+        </span>
       </CardContent>
       </Card>
     </div>

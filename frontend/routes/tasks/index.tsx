@@ -4,17 +4,22 @@ import { useTranslation } from 'react-i18next'
 import { KanbanBoard } from '@/components/kanban/kanban-board'
 import { TaskDependencyGraph } from '@/components/graph/task-dependency-graph'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { Search01Icon, GridViewIcon, HierarchyIcon } from '@hugeicons/core-free-icons'
+import { Search01Icon, GridViewIcon, HierarchyIcon, LayersIcon } from '@hugeicons/core-free-icons'
 import { Input } from '@/components/ui/input'
+import { Toggle } from '@/components/ui/toggle'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { TagsFilter } from '@/components/tasks/tags-filter'
 import { ProjectFilter } from '@/components/tasks/project-filter'
+import { TaskTypeFilter } from '@/components/tasks/task-type-filter'
+import type { TaskType } from '../../../shared/types'
 
 type ViewMode = 'kanban' | 'graph'
 
 interface TasksSearch {
   project?: string // 'inbox' for tasks without project, or project ID
   tags?: string // comma-separated tag names
+  types?: string // comma-separated task types (worktree, scratch, manual)
   view?: ViewMode
   task?: string // task ID for manual task modal
 }
@@ -24,6 +29,7 @@ export const Route = createFileRoute('/tasks/')({
   validateSearch: (search: Record<string, unknown>): TasksSearch => ({
     project: typeof search.project === 'string' ? search.project : undefined,
     tags: typeof search.tags === 'string' ? search.tags : undefined,
+    types: typeof search.types === 'string' ? search.types : undefined,
     view: search.view === 'graph' ? 'graph' : undefined,
     task: typeof search.task === 'string' ? search.task : undefined,
   }),
@@ -31,15 +37,22 @@ export const Route = createFileRoute('/tasks/')({
 
 function TasksView() {
   const { t } = useTranslation('tasks')
-  const { project: projectFilter, tags: tagsParam, view: viewMode = 'kanban', task: selectedTaskId } = Route.useSearch()
+  const { project: projectFilter, tags: tagsParam, types: typesParam, view: viewMode = 'kanban', task: selectedTaskId } = Route.useSearch()
   const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState('')
+  const [showTypeLabels, setShowTypeLabels] = useState(false)
 
   // Parse tags from URL param (comma-separated)
   const tagsFilter = useMemo(() => {
     if (!tagsParam) return []
     return tagsParam.split(',').filter(Boolean)
   }, [tagsParam])
+
+  // Parse task types from URL param (comma-separated)
+  const taskTypesFilter = useMemo(() => {
+    if (!typesParam) return [] as TaskType[]
+    return typesParam.split(',').filter(Boolean) as TaskType[]
+  }, [typesParam])
 
   const setProjectFilter = useCallback(
     (projectId: string | null) => {
@@ -57,6 +70,17 @@ function TasksView() {
       navigate({
         to: '/tasks',
         search: (prev) => ({ ...prev, tags: tags.length > 0 ? tags.join(',') : undefined }),
+        replace: true,
+      })
+    },
+    [navigate]
+  )
+
+  const setTaskTypesFilter = useCallback(
+    (types: TaskType[]) => {
+      navigate({
+        to: '/tasks',
+        search: (prev) => ({ ...prev, types: types.length > 0 ? types.join(',') : undefined }),
         replace: true,
       })
     },
@@ -92,6 +116,22 @@ function TasksView() {
         <div className="hidden sm:contents">
           <ProjectFilter value={projectFilter ?? null} onChange={setProjectFilter} />
           <TagsFilter value={tagsFilter} onChange={setTagsFilter} />
+          <TaskTypeFilter value={taskTypesFilter} onChange={setTaskTypesFilter} />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Toggle
+                size="sm"
+                variant="outline"
+                pressed={showTypeLabels}
+                onPressedChange={setShowTypeLabels}
+                className="h-7 w-7 p-0 shrink-0"
+                aria-label={t('typeFilter.showLabels')}
+              >
+                <HugeiconsIcon icon={LayersIcon} size={14} strokeWidth={2} />
+              </Toggle>
+            </TooltipTrigger>
+            <TooltipContent>{t('typeFilter.showLabels')}</TooltipContent>
+          </Tooltip>
         </div>
         <div className="flex-1" />
         <ToggleGroup
@@ -113,9 +153,9 @@ function TasksView() {
       </div>
       <div className="flex-1 overflow-hidden">
         {viewMode === 'kanban' && (
-          <KanbanBoard projectFilter={projectFilter ?? null} searchQuery={searchQuery} tagsFilter={tagsFilter} selectedTaskId={selectedTaskId} />
+          <KanbanBoard projectFilter={projectFilter ?? null} searchQuery={searchQuery} tagsFilter={tagsFilter} taskTypesFilter={taskTypesFilter} showTypeLabels={showTypeLabels} selectedTaskId={selectedTaskId} />
         )}
-        {viewMode === 'graph' && <TaskDependencyGraph projectFilter={projectFilter ?? null} tagsFilter={tagsFilter} />}
+        {viewMode === 'graph' && <TaskDependencyGraph projectFilter={projectFilter ?? null} tagsFilter={tagsFilter} taskTypesFilter={taskTypesFilter} />}
       </div>
     </div>
   )
