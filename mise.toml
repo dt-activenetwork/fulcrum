@@ -6,8 +6,8 @@ FULCRUM_DIR = "{{ env.FULCRUM_DIR | default(value='~/tmp/fulcrum') }}"
 [tools]
 bun = "latest"
 
-[hooks.postinstall]
-run = "bun install"
+[hooks]
+postinstall = "bun install"
 
 [tasks.install]
 description = "Install dependencies"
