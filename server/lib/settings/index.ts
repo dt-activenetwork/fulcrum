@@ -100,6 +100,7 @@ export {
   FNOX_CONFIG_MAP,
   FNOX_SECRET_MAP,
   clearFnoxCache,
+  ensureFnoxBootstrap,
 } from './fnox'
 
 // initializeFulcrumDirectories

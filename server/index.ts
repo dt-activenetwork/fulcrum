@@ -7,7 +7,7 @@ import {
   broadcast,
   broadcastToTerminal,
 } from './websocket/terminal-ws'
-import { ensureLatestConfig, getSettingByKey, initFnoxConfig } from './lib/settings'
+import { ensureFnoxBootstrap, ensureLatestConfig, getSettingByKey, initFnoxConfig } from './lib/settings'
 import { startPRMonitor, stopPRMonitor } from './services/pr-monitor'
 import { startMetricsCollector, stopMetricsCollector } from './services/metrics-collector'
 import { startGitWatcher, stopGitWatcher } from './services/git-watcher'
@@ -20,6 +20,9 @@ import { clearSensitiveEnvVars } from './lib/env'
 
 // Clear sensitive env vars inherited from parent shell before reading settings
 clearSensitiveEnvVars()
+
+// Bootstrap fnox (create age.txt + fnox.toml if missing, e.g. when started via systemd)
+ensureFnoxBootstrap()
 
 // Initialize fnox config cache (must happen before ensureLatestConfig for migration)
 initFnoxConfig()

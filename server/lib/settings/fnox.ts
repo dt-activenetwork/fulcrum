@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, chmodSync } from 'node:fs'
 import { join } from 'node:path'
 import { log } from '../logger'
 import { getFulcrumDir, isTestMode } from './paths'
@@ -182,6 +182,82 @@ export function isFnoxAvailable(): boolean {
     log.settings.debug('fnox not fully configured', { configExists, keyExists })
   }
   return _fnoxAvailable
+}
+
+// --- Server-side Bootstrap ---
+
+/**
+ * Bootstrap fnox configuration when the server starts directly (e.g. systemd)
+ * without going through `fulcrum up`. Creates age.txt and fnox.toml if missing.
+ * Skips gracefully if fnox or age-keygen binaries aren't available.
+ */
+export function ensureFnoxBootstrap(): void {
+  if (isTestMode()) return
+
+  const fulcrumDir = getFulcrumDir()
+  const ageKeyPath = join(fulcrumDir, 'age.txt')
+  const fnoxConfigPath = join(fulcrumDir, 'fnox.toml')
+
+  // If both files exist, nothing to do
+  if (existsSync(ageKeyPath) && existsSync(fnoxConfigPath)) return
+
+  // Check that required binaries are available
+  try {
+    execSync('which fnox', { stdio: 'ignore' })
+    execSync('which age-keygen', { stdio: 'ignore' })
+  } catch {
+    log.settings.debug('fnox or age-keygen not found, skipping bootstrap')
+    return
+  }
+
+  // Generate age key if needed
+  let publicKey: string
+  if (!existsSync(ageKeyPath)) {
+    log.settings.info('Generating age encryption key...')
+    try {
+      const output = execSync(`age-keygen -o "${ageKeyPath}" 2>&1`, { encoding: 'utf-8' })
+      const match = output.match(/Public key: (age1\S+)/)
+      if (!match) {
+        log.settings.error('Could not parse public key from age-keygen output', { output })
+        return
+      }
+      publicKey = match[1]
+      chmodSync(ageKeyPath, 0o600)
+    } catch (err) {
+      log.settings.error('Failed to generate age key', { error: String(err) })
+      return
+    }
+  } else {
+    const content = readFileSync(ageKeyPath, 'utf-8')
+    const match = content.match(/# public key: (age1\S+)/)
+    if (!match) {
+      log.settings.error('Could not parse public key from existing age.txt')
+      return
+    }
+    publicKey = match[1]
+  }
+
+  // Create fnox.toml if needed
+  if (!existsSync(fnoxConfigPath)) {
+    log.settings.info('Creating fnox configuration...')
+    const config = `[providers.plain]\ntype = "plain"\n\n[providers.age]\ntype = "age"\nrecipients = ["${publicKey}"]\n`
+    writeFileSync(fnoxConfigPath, config, 'utf-8')
+  } else {
+    // Ensure plain provider exists (upgrade from age-only)
+    const existingConfig = readFileSync(fnoxConfigPath, 'utf-8')
+    if (!existingConfig.includes('[providers.plain]')) {
+      const updatedConfig = `[providers.plain]\ntype = "plain"\n\n${existingConfig}`
+      writeFileSync(fnoxConfigPath, updatedConfig, 'utf-8')
+    }
+  }
+
+  // Set FNOX_AGE_KEY_FILE if not already set
+  if (!process.env.FNOX_AGE_KEY_FILE) {
+    process.env.FNOX_AGE_KEY_FILE = ageKeyPath
+  }
+
+  // Reset the cached availability check so isFnoxAvailable() sees the new files
+  _fnoxAvailable = null
 }
 
 // --- Core CLI Functions ---
