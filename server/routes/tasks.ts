@@ -1343,10 +1343,12 @@ app.get('/:id/attachments/:attachmentId', (c) => {
 
   // Read file and return
   const fileBuffer = fs.readFileSync(attachment.storedPath)
+  const inline = c.req.query('inline') === '1'
+  const disposition = inline ? 'inline' : 'attachment'
   return new Response(fileBuffer, {
     headers: {
       'Content-Type': attachment.mimeType,
-      'Content-Disposition': `attachment; filename="${attachment.filename}"`,
+      'Content-Disposition': `${disposition}; filename="${attachment.filename}"`,
       'Content-Length': String(attachment.size),
     },
   })

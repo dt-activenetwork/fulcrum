@@ -171,6 +171,39 @@ export const FileContent = observer(function FileContent({ onBack }: FileContent
     )
   }
 
+  // PDF file
+  if (currentFile.isPdf) {
+    const pdfUrl = `/api/fs/raw?path=${encodeURIComponent(selectedFile)}&root=${encodeURIComponent(worktreePath || '')}`
+    return (
+      <div className="flex flex-col h-full overflow-hidden bg-background">
+        <div className="flex shrink-0 items-center justify-between px-2 py-1.5 bg-card border-b border-border text-xs">
+          <span className="text-muted-foreground truncate" title={selectedFile}>
+            {selectedFile.split('/').pop() || selectedFile}
+          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground">
+              {(currentFile.size / 1024).toFixed(1)} KB
+            </span>
+            <button
+              onClick={handleBack}
+              className="p-1 text-muted-foreground hover:text-foreground rounded hover:bg-muted/50"
+              title="Close file"
+            >
+              <HugeiconsIcon icon={Cancel01Icon} size={14} strokeWidth={2} />
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 min-h-0">
+          <iframe
+            src={pdfUrl}
+            className="w-full h-full border-0"
+            title={selectedFile}
+          />
+        </div>
+      </div>
+    )
+  }
+
   // Binary file
   if (currentFile.isBinary) {
     return (

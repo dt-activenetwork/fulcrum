@@ -30,11 +30,14 @@ export const FileModel = types
     get isImage(): boolean {
       return self.mimeType.startsWith('image/')
     },
+    get isPdf(): boolean {
+      return self.mimeType === 'application/pdf'
+    },
     get isBinary(): boolean {
       return self.mimeType === 'application/octet-stream'
     },
     get isEditable(): boolean {
-      return !self.mimeType.startsWith('image/') && self.mimeType !== 'application/octet-stream'
+      return !self.mimeType.startsWith('image/') && self.mimeType !== 'application/octet-stream' && self.mimeType !== 'application/pdf'
     },
   }))
   .actions((self) => ({

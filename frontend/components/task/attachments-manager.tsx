@@ -8,6 +8,7 @@ import {
   Delete02Icon,
   Download02Icon,
   Upload02Icon,
+  Cancel01Icon,
 } from '@hugeicons/core-free-icons'
 import {
   useTaskAttachments,
@@ -33,6 +34,10 @@ function getFileIcon(mimeType: string) {
   return File02Icon
 }
 
+function isPreviewable(mimeType: string): boolean {
+  return mimeType === 'application/pdf' || mimeType.startsWith('image/')
+}
+
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -46,6 +51,7 @@ export function AttachmentsManager({ taskId }: AttachmentsManagerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [previewAttachment, setPreviewAttachment] = useState<TaskAttachment | null>(null)
 
   const handleFileSelect = useCallback(
     async (files: FileList | null) => {
@@ -87,6 +93,9 @@ export function AttachmentsManager({ taskId }: AttachmentsManagerProps) {
   )
 
   const handleDelete = async (attachment: TaskAttachment) => {
+    if (previewAttachment?.id === attachment.id) {
+      setPreviewAttachment(null)
+    }
     try {
       await deleteMutation.mutateAsync({ taskId, attachmentId: attachment.id })
     } catch {
@@ -99,12 +108,69 @@ export function AttachmentsManager({ taskId }: AttachmentsManagerProps) {
     window.open(url, '_blank')
   }
 
+  const handleClick = (attachment: TaskAttachment) => {
+    if (isPreviewable(attachment.mimeType)) {
+      setPreviewAttachment(prev => prev?.id === attachment.id ? null : attachment)
+    } else {
+      handleDownload(attachment)
+    }
+  }
+
   if (isLoading) {
     return <div className="text-xs text-muted-foreground">Loading attachments...</div>
   }
 
   return (
     <div className="space-y-3">
+      {/* Preview panel */}
+      {previewAttachment && (
+        <div className="rounded border bg-card overflow-hidden">
+          <div className="flex items-center justify-between px-2 py-1.5 border-b border-border text-xs">
+            <span className="text-muted-foreground truncate">
+              {previewAttachment.filename}
+            </span>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-5 w-5 p-0"
+                onClick={() => handleDownload(previewAttachment)}
+                title="Download"
+              >
+                <HugeiconsIcon icon={Download02Icon} size={12} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-5 w-5 p-0"
+                onClick={() => setPreviewAttachment(null)}
+                title="Close preview"
+              >
+                <HugeiconsIcon icon={Cancel01Icon} size={12} />
+              </Button>
+            </div>
+          </div>
+          <div className="bg-muted">
+            {previewAttachment.mimeType === 'application/pdf' ? (
+              <iframe
+                src={`${getAttachmentDownloadUrl(taskId, previewAttachment.id)}?inline=1`}
+                className="w-full border-0"
+                style={{ height: '500px' }}
+                title={previewAttachment.filename}
+              />
+            ) : previewAttachment.mimeType.startsWith('image/') ? (
+              <div className="p-4 flex items-center justify-center">
+                <img
+                  src={getAttachmentDownloadUrl(taskId, previewAttachment.id)}
+                  alt={previewAttachment.filename}
+                  className="max-w-full max-h-[400px] object-contain"
+                />
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
+
       {/* Upload area */}
       <div
         className={cn(
@@ -140,10 +206,18 @@ export function AttachmentsManager({ taskId }: AttachmentsManagerProps) {
         <div className="space-y-1.5">
           {attachments.map((attachment) => {
             const FileIcon = getFileIcon(attachment.mimeType)
+            const previewing = previewAttachment?.id === attachment.id
             return (
               <div
                 key={attachment.id}
-                className="flex items-center gap-2 p-2 rounded border bg-card hover:bg-accent/50 transition-colors group"
+                className={cn(
+                  'flex items-center gap-2 p-2 rounded border transition-colors group',
+                  isPreviewable(attachment.mimeType) ? 'cursor-pointer' : 'cursor-default',
+                  previewing
+                    ? 'bg-primary/10 border-primary/30'
+                    : 'bg-card hover:bg-accent/50'
+                )}
+                onClick={() => handleClick(attachment)}
               >
                 <HugeiconsIcon icon={FileIcon} size={16} className="text-muted-foreground shrink-0" />
                 <div className="flex-1 min-w-0">
@@ -155,7 +229,7 @@ export function AttachmentsManager({ taskId }: AttachmentsManagerProps) {
                     variant="ghost"
                     size="sm"
                     className="h-6 w-6 p-0"
-                    onClick={() => handleDownload(attachment)}
+                    onClick={(e) => { e.stopPropagation(); handleDownload(attachment) }}
                     title="Download"
                   >
                     <HugeiconsIcon icon={Download02Icon} size={14} />
@@ -164,7 +238,7 @@ export function AttachmentsManager({ taskId }: AttachmentsManagerProps) {
                     variant="ghost"
                     size="sm"
                     className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                    onClick={() => handleDelete(attachment)}
+                    onClick={(e) => { e.stopPropagation(); handleDelete(attachment) }}
                     disabled={deleteMutation.isPending}
                     title="Delete"
                   >

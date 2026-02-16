@@ -157,6 +157,7 @@ function getMimeType(filePath: string): string {
     '.rs': 'text/x-rust',
     '.go': 'text/x-go',
     '.sql': 'text/x-sql',
+    '.pdf': 'application/pdf',
   }
   return mimeTypes[ext] || 'text/plain'
 }
@@ -316,6 +317,18 @@ app.get('/read', (c) => {
       } satisfies FileReadResponse)
     }
 
+    // Handle PDFs - return metadata only (rendered via /api/fs/raw endpoint)
+    if (mimeType === 'application/pdf') {
+      return c.json({
+        content: '',
+        mimeType,
+        size: stat.size,
+        lineCount: 0,
+        truncated: false,
+        mtime: stat.mtime.toISOString(),
+      } satisfies FileReadResponse)
+    }
+
     // Read file content
     const buffer = fs.readFileSync(resolvedPath)
 
@@ -449,6 +462,62 @@ app.get('/image', (c) => {
     })
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : 'Failed to read image' }, 500)
+  }
+})
+
+// Allowed MIME types for the raw endpoint
+const RAW_ALLOWED_TYPES = new Set(['application/pdf'])
+
+// GET /api/fs/raw?path=/path/to/file&root=/worktree/root
+// Returns raw file data with proper content-type (for use in <iframe>, <embed>, etc.)
+app.get('/raw', (c) => {
+  const filePath = c.req.query('path')
+  const root = c.req.query('root')
+
+  if (!filePath) {
+    return c.json({ error: 'path parameter is required' }, 400)
+  }
+
+  if (!root) {
+    return c.json({ error: 'root parameter is required' }, 400)
+  }
+
+  const resolvedRoot = path.resolve(root)
+  const resolvedPath = path.resolve(resolvedRoot, filePath)
+
+  // Security: validate path is within root
+  if (!isPathWithinRoot(resolvedPath, resolvedRoot)) {
+    return c.json({ error: 'Access denied: path outside root' }, 403)
+  }
+
+  try {
+    if (!fs.existsSync(resolvedPath)) {
+      return c.json({ error: 'File not found' }, 404)
+    }
+
+    const stat = fs.statSync(resolvedPath)
+    if (!stat.isFile()) {
+      return c.json({ error: 'Path is not a file' }, 400)
+    }
+
+    const mimeType = getMimeType(resolvedPath)
+
+    if (!RAW_ALLOWED_TYPES.has(mimeType)) {
+      return c.json({ error: 'File type not supported for raw serving' }, 400)
+    }
+
+    const buffer = fs.readFileSync(resolvedPath)
+
+    return new Response(buffer, {
+      headers: {
+        'Content-Type': mimeType,
+        'Content-Disposition': `inline; filename="${path.basename(resolvedPath)}"`,
+        'Content-Length': buffer.length.toString(),
+        'Cache-Control': 'public, max-age=3600',
+      },
+    })
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : 'Failed to read file' }, 500)
   }
 })
 
