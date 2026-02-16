@@ -47,7 +47,7 @@ function extractServiceName(containerName: string): string {
 
 // Helper to generate project name matching backend logic
 function getProjectName(appId: string, repoName?: string): string {
-  const suffix = appId.slice(0, 8).toLowerCase()
+  const suffix = appId.slice(0, 8).toLowerCase().replace(/[^a-z0-9]/g, '')
   if (repoName) {
     // Sanitize repo name for Docker: lowercase, alphanumeric + hyphens only, max 20 chars
     const sanitized = repoName
