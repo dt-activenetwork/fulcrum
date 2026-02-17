@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { createFileRoute, Link, useNavigate, useParams, useSearch } from '@tanstack/react-router'
+import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { observer } from 'mobx-react-lite'
 import { useQueryClient } from '@tanstack/react-query'
@@ -283,12 +284,16 @@ const RepositoryDetailView = observer(function RepositoryDetailView() {
   )
 
   const handleDelete = async () => {
-    await deleteRepository.mutateAsync({
-      id: repoId,
-      deleteDirectory,
-      deleteApp,
-    })
-    navigate({ to: '/repositories' })
+    try {
+      await deleteRepository.mutateAsync({
+        id: repoId,
+        deleteDirectory,
+        deleteApp,
+      })
+      navigate({ to: '/repositories' })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete repository')
+    }
   }
 
   const handleCreateApp = () => {

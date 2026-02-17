@@ -1,9 +1,9 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { createTestApp } from '../__tests__/fixtures/app'
 import { setupTestEnv, type TestEnv } from '../__tests__/utils/env'
-import { db, repositories, projects } from '../db'
+import { db, repositories, projects, projectRepositories, tasks, apps, appServices } from '../db'
 import { eq } from 'drizzle-orm'
 
 describe('Repositories Routes', () => {
@@ -638,13 +638,13 @@ describe('Repositories Routes', () => {
       expect(deleted).toBeUndefined()
     })
 
-    test('returns 400 when repository is linked to a project', async () => {
+    test('deletes repo linked via projectRepositories join table', async () => {
       const now = new Date().toISOString()
       db.insert(repositories)
         .values({
-          id: 'linked-repo',
-          path: '/path/to/linked',
-          displayName: 'Linked Repo',
+          id: 'jr-repo',
+          path: '/path/to/jr',
+          displayName: 'Join Table Repo',
           createdAt: now,
           updatedAt: now,
         })
@@ -652,9 +652,53 @@ describe('Repositories Routes', () => {
 
       db.insert(projects)
         .values({
-          id: 'linked-project',
-          name: 'Linked Project',
-          repositoryId: 'linked-repo',
+          id: 'jr-project',
+          name: 'JR Project',
+          status: 'active',
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run()
+
+      db.insert(projectRepositories)
+        .values({
+          id: 'pr-link-1',
+          projectId: 'jr-project',
+          repositoryId: 'jr-repo',
+          createdAt: now,
+        })
+        .run()
+
+      const { request } = createTestApp()
+      const res = await request('/api/repositories/jr-repo', { method: 'DELETE' })
+      const body = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(body.success).toBe(true)
+
+      // Repo deleted
+      expect(db.select().from(repositories).where(eq(repositories.id, 'jr-repo')).get()).toBeUndefined()
+      // Join table entry removed
+      expect(db.select().from(projectRepositories).where(eq(projectRepositories.repositoryId, 'jr-repo')).get()).toBeUndefined()
+    })
+
+    test('deletes repo linked via deprecated projects.repositoryId and nulls the column', async () => {
+      const now = new Date().toISOString()
+      db.insert(repositories)
+        .values({
+          id: 'legacy-repo',
+          path: '/path/to/legacy',
+          displayName: 'Legacy Repo',
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run()
+
+      db.insert(projects)
+        .values({
+          id: 'legacy-project',
+          name: 'Legacy Project',
+          repositoryId: 'legacy-repo',
           status: 'active',
           createdAt: now,
           updatedAt: now,
@@ -662,18 +706,126 @@ describe('Repositories Routes', () => {
         .run()
 
       const { request } = createTestApp()
-      const res = await request('/api/repositories/linked-repo', {
-        method: 'DELETE',
-      })
+      const res = await request('/api/repositories/legacy-repo', { method: 'DELETE' })
       const body = await res.json()
 
-      expect(res.status).toBe(400)
-      expect(body.error).toContain('linked to a project')
-      expect(body.projectId).toBe('linked-project')
+      expect(res.status).toBe(200)
+      expect(body.success).toBe(true)
 
-      // Verify repository is NOT deleted
-      const repo = db.select().from(repositories).where(eq(repositories.id, 'linked-repo')).get()
-      expect(repo).toBeDefined()
+      // Repo deleted
+      expect(db.select().from(repositories).where(eq(repositories.id, 'legacy-repo')).get()).toBeUndefined()
+      // Project still exists but repositoryId is nulled
+      const project = db.select().from(projects).where(eq(projects.id, 'legacy-project')).get()
+      expect(project).toBeDefined()
+      expect(project!.repositoryId).toBeNull()
+    })
+
+    test('nulls tasks.repositoryId when deleting referenced repo', async () => {
+      const now = new Date().toISOString()
+      db.insert(repositories)
+        .values({
+          id: 'task-repo',
+          path: '/path/to/task-repo',
+          displayName: 'Task Repo',
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run()
+
+      db.insert(tasks)
+        .values({
+          id: 'task-1',
+          title: 'Test Task',
+          status: 'TO_DO',
+          position: 0,
+          repositoryId: 'task-repo',
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run()
+
+      const { request } = createTestApp()
+      const res = await request('/api/repositories/task-repo', { method: 'DELETE' })
+      const body = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(body.success).toBe(true)
+
+      // Task still exists but repositoryId is nulled
+      const task = db.select().from(tasks).where(eq(tasks.id, 'task-1')).get()
+      expect(task).toBeDefined()
+      expect(task!.repositoryId).toBeNull()
+    })
+
+    test('deletes directory when deleteDirectory=true', async () => {
+      const repoPath = join(testEnv.fulcrumDir, 'dir-to-delete')
+      mkdirSync(repoPath, { recursive: true })
+      mkdirSync(join(repoPath, '.git'), { recursive: true })
+
+      const now = new Date().toISOString()
+      db.insert(repositories)
+        .values({
+          id: 'dir-repo',
+          path: repoPath,
+          displayName: 'Dir Repo',
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run()
+
+      const { request } = createTestApp()
+      const res = await request('/api/repositories/dir-repo?deleteDirectory=true', { method: 'DELETE' })
+      const body = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(body.success).toBe(true)
+      expect(body.directoryDeleted).toBe(true)
+      expect(existsSync(repoPath)).toBe(false)
+    })
+
+    test('deletes linked app when deleteApp=true', async () => {
+      const now = new Date().toISOString()
+      db.insert(repositories)
+        .values({
+          id: 'app-repo',
+          path: '/path/to/app-repo',
+          displayName: 'App Repo',
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run()
+
+      db.insert(apps)
+        .values({
+          id: 'linked-app',
+          name: 'Linked App',
+          repositoryId: 'app-repo',
+          composeFile: 'compose.yml',
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run()
+
+      db.insert(appServices)
+        .values({
+          id: 'svc-1',
+          appId: 'linked-app',
+          serviceName: 'web',
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run()
+
+      const { request } = createTestApp()
+      const res = await request('/api/repositories/app-repo?deleteApp=true', { method: 'DELETE' })
+      const body = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(body.success).toBe(true)
+
+      // App and services deleted
+      expect(db.select().from(apps).where(eq(apps.id, 'linked-app')).get()).toBeUndefined()
+      expect(db.select().from(appServices).where(eq(appServices.appId, 'linked-app')).get()).toBeUndefined()
     })
 
     test('returns 404 for non-existent repository', async () => {

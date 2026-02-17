@@ -1,8 +1,9 @@
 import { Hono } from 'hono'
-import { existsSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readdirSync, rmSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { homedir } from 'node:os'
 import { nanoid } from 'nanoid'
-import { db, repositories, projects, projectRepositories } from '../db'
+import { db, repositories, projects, projectRepositories, apps, appServices, tasks } from '../db'
 import { eq, desc, sql } from 'drizzle-orm'
 import { getSettings, expandPath } from '../lib/settings'
 import type { Repository } from '../../../shared/types'
@@ -235,28 +236,70 @@ app.patch('/:id', async (c) => {
   }
 })
 
-// DELETE /api/repositories/:id - Delete repository
-// Rejects if a project references this repository (use DELETE /api/projects/:id instead)
+// DELETE /api/repositories/:id - Delete repository (unlinks from projects/tasks first)
+// Query params:
+//   deleteDirectory=true - Also delete the directory from disk
+//   deleteApp=true - Also delete the linked app
 app.delete('/:id', (c) => {
   const id = c.req.param('id')
+  const deleteDirectory = c.req.query('deleteDirectory') === 'true'
+  const deleteAppFlag = c.req.query('deleteApp') === 'true'
 
   const existing = db.select().from(repositories).where(eq(repositories.id, id)).get()
   if (!existing) {
     return c.json({ error: 'Repository not found' }, 404)
   }
 
-  // Check if any project references this repository
-  const linkedProject = db.select().from(projects).where(eq(projects.repositoryId, id)).get()
-  if (linkedProject) {
-    return c.json({
-      error: 'Cannot delete repository that is linked to a project. Use DELETE /api/projects/:id instead.',
-      projectId: linkedProject.id,
-    }, 400)
+  // Optionally delete linked app
+  if (deleteAppFlag) {
+    const linkedApp = db.select().from(apps).where(eq(apps.repositoryId, id)).get()
+    if (linkedApp) {
+      db.delete(appServices).where(eq(appServices.appId, linkedApp.id)).run()
+      db.delete(apps).where(eq(apps.id, linkedApp.id)).run()
+    }
   }
 
-  // If no project references this repository, allow deletion (cleanup orphaned repos)
+  // Optionally delete directory from disk
+  let directoryDeleted = false
+  if (deleteDirectory && existing.path) {
+    const repoPath = existing.path
+    const home = homedir()
+    if (resolve(repoPath) === home) {
+      return c.json({ error: 'Cannot delete home directory' }, 400)
+    }
+    const dangerousPaths = ['/', '/home', '/usr', '/etc', '/var', '/tmp', '/root']
+    if (dangerousPaths.includes(resolve(repoPath))) {
+      return c.json({ error: 'Cannot delete system directory' }, 400)
+    }
+    if (existsSync(repoPath)) {
+      const gitPath = join(repoPath, '.git')
+      if (!existsSync(gitPath)) {
+        return c.json({ error: 'Directory does not appear to be a git repository' }, 400)
+      }
+      try {
+        rmSync(repoPath, { recursive: true, force: true })
+        directoryDeleted = true
+      } catch (err) {
+        return c.json({
+          error: `Failed to delete directory: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        }, 500)
+      }
+    }
+  }
+
+  // Clean up projectRepositories join table
+  db.delete(projectRepositories).where(eq(projectRepositories.repositoryId, id)).run()
+
+  // Null out deprecated projects.repositoryId
+  db.update(projects).set({ repositoryId: null }).where(eq(projects.repositoryId, id)).run()
+
+  // Null out tasks.repositoryId
+  db.update(tasks).set({ repositoryId: null }).where(eq(tasks.repositoryId, id)).run()
+
+  // Delete the repository record
   db.delete(repositories).where(eq(repositories.id, id)).run()
-  return c.json({ success: true })
+
+  return c.json({ success: true, directoryDeleted })
 })
 
 // POST /api/repositories/scan - Scan directory for git repositories
