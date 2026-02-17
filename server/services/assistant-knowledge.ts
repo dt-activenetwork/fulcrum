@@ -136,6 +136,17 @@ You have access to Fulcrum's MCP tools. Use them proactively to help users.
 - \`get_app_logs\`, \`get_app_status\`
 - \`list_deployments\`
 
+**Job Scheduling:**
+- \`list_jobs\` - List scheduled jobs (systemd timers / launchd agents)
+- \`get_job\` - Get job details (schedule, command, execution stats, unit files)
+- \`get_job_logs\` - Get job execution logs
+- \`create_job\` - Create a scheduled job (Linux systemd only)
+- \`update_job\` - Update a scheduled job
+- \`delete_job\` - Delete a scheduled job
+- \`enable_job\` - Enable a job's timer
+- \`disable_job\` - Disable a job's timer
+- \`run_job_now\` - Trigger immediate execution
+
 **File Operations:**
 - \`read_file\`, \`write_file\`, \`edit_file\`
 - \`list_directory\`, \`get_file_tree\`
@@ -226,12 +237,8 @@ export function getOrchestrationCapabilities(): string {
 
 Beyond the MCP tools, you can use \`execute_command\` to run any CLI command:
 
-**Scheduling Jobs (Linux systemd timers):**
-\`\`\`bash
-# Create a user timer that runs daily at 9am
-systemctl --user enable my-job.timer
-systemctl --user start my-job.timer
-\`\`\`
+**Scheduling Jobs:**
+Fulcrum has a built-in Jobs feature (see **Job Scheduling Guide**). Use the job scheduling MCP tools (\`list_jobs\`, \`create_job\`, \`get_job_logs\`, etc.) or direct users to the Jobs UI (/jobs, Cmd+6).
 
 **Package Management:**
 \`\`\`bash
@@ -298,17 +305,10 @@ export function getProblemSolvingPatterns(): string {
 ### Automation Tasks
 
 **"Schedule a daily job" (e.g., email responder, report generator):**
-1. Create a task with worktree for the automation script
-2. Help write the script (Python, Node, etc.)
-3. Ask what credentials/services they need (email provider, APIs)
-4. Create systemd timer via execute_command
-5. Optionally set up notifications on success/failure
+See the **Job Scheduling Guide** section for full details. In short: help write the script, then use the \`create_job\` MCP tool to schedule it (or direct the user to the Jobs UI at /jobs).
 
 **"Deploy my app":**
-1. Check if they have a Dockerfile/docker-compose.yml
-2. Create a Fulcrum app from the repository
-3. Use tunnels for public access without cloud setup
-4. OR guide AWS/GCP/Azure setup via their CLIs
+See the **App Deployment Guide** section for the full step-by-step workflow (create app → configure exposure → deploy → verify).
 
 ### Task Management
 
@@ -364,6 +364,193 @@ export function getProblemSolvingPatterns(): string {
 2. If not, guide using execute_command with the service's CLI
 3. Store credentials securely (environment variables, not in code)
 4. Create tasks/scripts to automate the integration`
+}
+
+/**
+ * App deployment guide - step-by-step deployment workflow
+ */
+export function getAppDeploymentGuide(): string {
+  return `## App Deployment Guide
+
+### Prerequisites
+
+1. **Docker** installed and running (Fulcrum uses Docker Swarm mode)
+2. **Repository** added to Fulcrum that contains a Docker Compose file
+3. **Cloudflare API token** configured in settings (for DNS or tunnel exposure) — only needed if you want to expose services publicly
+
+### Step-by-Step Deployment
+
+**Step 1: Create the app**
+
+Use the \`create_app\` MCP tool:
+\`\`\`
+create_app name="my-app" repositoryId=<id> branch="main"
+\`\`\`
+- \`composeFile\` is optional — Fulcrum auto-detects compose files (checks \`compose.yml\`, \`compose.yaml\`, \`docker-compose.yml\`, \`docker-compose.yaml\` in order)
+- \`autoDeployEnabled\` (optional) — enable auto-deploy on git push
+- \`noCacheBuild\` (optional) — disable Docker build cache
+
+**Step 2: Configure service exposure**
+
+There is no MCP tool for this — use \`execute_command\` with curl to PATCH the app:
+\`\`\`bash
+curl -s -X PATCH http://localhost:7777/api/apps/<app-id> \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "services": [{
+      "serviceName": "web",
+      "containerPort": 3000,
+      "exposed": true,
+      "domain": "myapp.example.com",
+      "exposureMethod": "dns"
+    }]
+  }'
+\`\`\`
+
+Service configuration fields:
+- \`serviceName\` — must match a service name in the compose file
+- \`containerPort\` — the port the container listens on
+- \`exposed\` — \`true\` to make it publicly accessible
+- \`domain\` — the domain to route traffic to this service
+- \`exposureMethod\` — \`"dns"\` (Traefik + Cloudflare A record) or \`"tunnel"\` (Cloudflare Tunnel)
+
+You can also set other app options in the same PATCH:
+- \`autoPortAllocation\` — auto-allocate host ports when conflicts are detected
+- \`environmentVariables\` — key-value pairs injected into the deployment
+- \`notificationsEnabled\` — send notifications on deploy success/failure
+
+**Step 3: Deploy**
+
+\`\`\`
+deploy_app id=<app-id>
+\`\`\`
+
+This builds images (if the compose file has \`build\` directives), generates a Swarm-compatible compose file, and deploys the stack.
+
+**Step 4: Verify**
+
+\`\`\`
+get_app_status id=<app-id>
+get_app_logs id=<app-id>
+\`\`\`
+- \`get_app_status\` shows container status and replica health (e.g., "1/1")
+- \`get_app_logs\` returns container logs (use \`service\` param to filter, \`tail\` to limit lines)
+
+### Docker Compose Tips
+
+- **No Traefik network needed** — Fulcrum auto-adds the Traefik network to all services during Swarm compose generation
+- **Host ports are optional** — Fulcrum validates ports and auto-allocates if conflicts exist (when \`autoPortAllocation\` is enabled)
+- **Multi-stage builds work** — Fulcrum runs \`docker compose build\` first, then generates Swarm-compatible compose with pre-built image references
+- **Swarm incompatibilities handled automatically** — fields like \`container_name\`, \`links\`, \`network_mode\`, \`restart\` (converted to \`deploy.restart_policy\`), and \`depends_on\` conditions are removed/converted
+- **Relative volume paths** are resolved to absolute paths based on the repository directory
+- **Environment variable expansion** works in port mappings (e.g., \`\${PORT:-3000}:3000\`)
+
+### Exposure Options
+
+**DNS mode** (default):
+- Traefik reverse proxy routes traffic to containers
+- Cloudflare A record points the domain to the server's IP
+- Origin CA SSL certificate auto-generated (falls back to ACME if unavailable)
+- HTTP automatically redirected to HTTPS
+- Requires ports 80/443 accessible from the internet
+
+**Tunnel mode**:
+- Cloudflare Tunnel provides NAT traversal (no open ports needed)
+- CNAME record points the domain to the tunnel
+- Best for servers behind NAT or firewalls
+- Slightly higher latency than DNS mode
+
+### Debugging
+
+- **Container logs**: \`get_app_logs id=<id>\` (optionally filter by \`service\`)
+- **Generated Swarm compose**: Check \`~/.fulcrum/apps/<id>/swarm-compose.yml\` to see what was actually deployed
+- **Port conflicts**: Detected and reported during deployment — enable \`autoPortAllocation\` to auto-resolve
+- **Replica health**: \`get_app_status\` shows replica counts (e.g., "1/1" means healthy, "0/1" means failing)
+- **Traefik routing**: Fulcrum checks for route conflicts across all apps before adding new routes
+- **Deployment history**: \`list_deployments\` shows past deployments with status and logs`
+}
+
+/**
+ * Job scheduling guide - managing scheduled jobs via Fulcrum's OS-native integration
+ */
+export function getJobSchedulingGuide(): string {
+  return `## Job Scheduling Guide
+
+Fulcrum provides a built-in interface for managing scheduled jobs (cron-style). Rather than implementing its own scheduler, Fulcrum delegates to the OS's native job scheduler and provides MCP tools and a UI on top.
+
+### Platform Support
+
+| Platform | Scheduler | Capabilities |
+|----------|-----------|-------------|
+| **Linux** | systemd user timers | Full CRUD: create, edit, delete, enable/disable, run now, view logs |
+| **macOS** | launchd | Read-only: list and inspect LaunchAgents/LaunchDaemons, view logs |
+
+### Managing Jobs via MCP Tools
+
+**Discover existing jobs:**
+\`\`\`
+list_jobs scope="user"
+get_job name="daily-backup"
+\`\`\`
+
+**Create a job (Linux only):**
+\`\`\`
+create_job name="daily-backup" description="Back up database nightly" schedule="*-*-* 02:00:00" command="/home/user/scripts/backup.sh" workingDirectory="/home/user" persistent=true
+\`\`\`
+
+This creates both a \`.timer\` and \`.service\` unit file in \`~/.config/systemd/user/\`, enables the timer, and starts it.
+
+**Schedule format** (systemd OnCalendar syntax):
+- \`daily\` — every day at midnight
+- \`weekly\` — every Monday at midnight
+- \`*-*-* 09:00:00\` — every day at 9am
+- \`Mon..Fri 09:00\` — weekdays at 9am
+- \`*-*-01 00:00:00\` — first of every month
+- \`hourly\` — every hour
+
+**Update and manage jobs:**
+\`\`\`
+update_job name="daily-backup" schedule="*-*-* 03:00:00" command="/home/user/scripts/backup-v2.sh"
+delete_job name="old-job"
+\`\`\`
+
+**Control job execution:**
+\`\`\`
+enable_job name="daily-backup"
+disable_job name="daily-backup"
+run_job_now name="daily-backup"
+\`\`\`
+
+**Debug with logs:**
+\`\`\`
+get_job_logs name="daily-backup" lines=50
+\`\`\`
+
+### The Jobs UI
+
+Users can also manage jobs at the **/jobs** page (Cmd+6):
+- Browse all user and system jobs with status indicators
+- Search/filter by name and scope
+- View job details: schedule, command, working directory, execution stats
+- View timer and service unit file contents
+- Logs tab with auto-refresh (5s)
+- Action buttons: Run Now, Enable/Disable, Delete (user jobs only)
+- Create new jobs via the "New Job" form (Linux only)
+
+### Typical Workflow
+
+1. Help the user write the script they want to schedule (create a task with worktree or scratch)
+2. Once the script is ready, use \`create_job\` with the appropriate schedule
+3. Verify it's running: \`get_job\` to check status, \`get_job_logs\` for output
+4. Optionally set up notifications for success/failure
+
+### Debugging
+
+- **Job not running?** Use \`get_job\` — check \`enabled\` and \`state\` fields
+- **View logs**: \`get_job_logs\` — shows journalctl output with timestamps and priority
+- **Execution stats**: \`get_job\` includes \`lastRunDurationMs\`, \`lastRunCpuTimeMs\`, \`lastResult\` (success/failed)
+- **Unit files**: \`get_job\` includes \`timerContent\` and \`serviceContent\` for inspecting the raw systemd units
+- **Persistent timers**: When \`persistent: true\` (default), missed executions run on next boot`
 }
 
 /**
@@ -537,6 +724,10 @@ ${getDataModel()}
 ${getMcpToolCapabilities()}
 
 ${getSettingsKnowledge()}
+
+${getAppDeploymentGuide()}
+
+${getJobSchedulingGuide()}
 
 ${getOrchestrationCapabilities()}
 

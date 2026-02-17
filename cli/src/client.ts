@@ -28,6 +28,12 @@ import type {
   ExecuteCommandRequest,
   ExecuteCommandResponse,
   ExecSession,
+  SystemdTimer,
+  SystemdTimerDetail,
+  CreateTimerRequest,
+  UpdateTimerRequest,
+  JobLogEntry,
+  JobScope,
 } from '@shared/types'
 
 export interface CreateTaskInput {
@@ -1435,6 +1441,68 @@ export class FulcrumClient {
       method: 'PATCH',
       body: JSON.stringify({ heading, content }),
     })
+  }
+
+  // Jobs
+  async listJobs(scope?: 'all' | 'user' | 'system'): Promise<SystemdTimer[]> {
+    const params = new URLSearchParams()
+    if (scope) params.set('scope', scope)
+    const query = params.toString() ? `?${params.toString()}` : ''
+    return this.fetch(`/api/jobs${query}`)
+  }
+
+  async getJob(name: string, scope?: JobScope): Promise<SystemdTimerDetail> {
+    const params = new URLSearchParams()
+    if (scope) params.set('scope', scope)
+    const query = params.toString() ? `?${params.toString()}` : ''
+    return this.fetch(`/api/jobs/${encodeURIComponent(name)}${query}`)
+  }
+
+  async getJobLogs(name: string, scope?: JobScope, lines?: number): Promise<{ entries: JobLogEntry[] }> {
+    const params = new URLSearchParams()
+    if (scope) params.set('scope', scope)
+    if (lines) params.set('lines', String(lines))
+    const query = params.toString() ? `?${params.toString()}` : ''
+    return this.fetch(`/api/jobs/${encodeURIComponent(name)}/logs${query}`)
+  }
+
+  async createJob(data: CreateTimerRequest): Promise<{ success: true }> {
+    return this.fetch('/api/jobs', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateJob(name: string, updates: UpdateTimerRequest): Promise<{ success: true }> {
+    return this.fetch(`/api/jobs/${encodeURIComponent(name)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    })
+  }
+
+  async deleteJob(name: string): Promise<{ success: true }> {
+    return this.fetch(`/api/jobs/${encodeURIComponent(name)}`, { method: 'DELETE' })
+  }
+
+  async enableJob(name: string, scope?: JobScope): Promise<{ success: true }> {
+    const params = new URLSearchParams()
+    if (scope) params.set('scope', scope)
+    const query = params.toString() ? `?${params.toString()}` : ''
+    return this.fetch(`/api/jobs/${encodeURIComponent(name)}/enable${query}`, { method: 'POST' })
+  }
+
+  async disableJob(name: string, scope?: JobScope): Promise<{ success: true }> {
+    const params = new URLSearchParams()
+    if (scope) params.set('scope', scope)
+    const query = params.toString() ? `?${params.toString()}` : ''
+    return this.fetch(`/api/jobs/${encodeURIComponent(name)}/disable${query}`, { method: 'POST' })
+  }
+
+  async runJobNow(name: string, scope?: JobScope): Promise<{ success: true }> {
+    const params = new URLSearchParams()
+    if (scope) params.set('scope', scope)
+    const query = params.toString() ? `?${params.toString()}` : ''
+    return this.fetch(`/api/jobs/${encodeURIComponent(name)}/run${query}`, { method: 'POST' })
   }
 
   // Unified Search
