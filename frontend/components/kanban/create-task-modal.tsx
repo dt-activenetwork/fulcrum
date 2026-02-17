@@ -32,6 +32,8 @@ import {
   ComboboxList,
   ComboboxItem,
   ComboboxEmpty,
+  ComboboxGroup,
+  ComboboxLabel,
 } from '@/components/ui/combobox'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { TaskAdd01Icon, Folder01Icon, Cancel01Icon, Attachment01Icon, Link01Icon, Add01Icon, Tick01Icon, PinIcon, PinOffIcon } from '@hugeicons/core-free-icons'
@@ -207,12 +209,18 @@ export function CreateTaskModal({ open: controlledOpen, onOpenChange, defaultRep
     )
   }, [repositories, repoSearchQuery, selectedRepo])
 
-  const filteredBranches = useMemo(() => {
-    if (!branchData?.branches) return []
-    if (!branchSearchQuery.trim() || branchSearchQuery === baseBranch) return branchData.branches
+  const { filteredLocalBranches, filteredRemoteBranches } = useMemo(() => {
+    const local = branchData?.branches ?? []
+    const remote = branchData?.remoteBranches ?? []
+    if (!branchSearchQuery.trim() || branchSearchQuery === baseBranch) {
+      return { filteredLocalBranches: local, filteredRemoteBranches: remote }
+    }
     const query = branchSearchQuery.toLowerCase()
-    return branchData.branches.filter((b) => b.toLowerCase().includes(query))
-  }, [branchData?.branches, branchSearchQuery, baseBranch])
+    return {
+      filteredLocalBranches: local.filter((b) => b.toLowerCase().includes(query)),
+      filteredRemoteBranches: remote.filter((b) => b.toLowerCase().includes(query)),
+    }
+  }, [branchData?.branches, branchData?.remoteBranches, branchSearchQuery, baseBranch])
 
   // Set default tab based on whether repositories exist
   useEffect(() => {
@@ -943,14 +951,29 @@ export function CreateTaskModal({ open: controlledOpen, onOpenChange, defaultRep
                   <ComboboxContent>
                     <ComboboxList>
                       <ComboboxEmpty>{t('createModal.noBranchesFound')}</ComboboxEmpty>
-                      {filteredBranches.map((b) => (
-                        <ComboboxItem key={b} value={b}>
-                          {b}
-                          {b === branchData?.current && (
-                            <span className="text-muted-foreground ml-2">{t('createModal.current')}</span>
-                          )}
-                        </ComboboxItem>
-                      ))}
+                      {filteredLocalBranches.length > 0 && (
+                        <ComboboxGroup>
+                          {filteredRemoteBranches.length > 0 && <ComboboxLabel>Local</ComboboxLabel>}
+                          {filteredLocalBranches.map((b) => (
+                            <ComboboxItem key={b} value={b}>
+                              {b}
+                              {b === branchData?.current && (
+                                <span className="text-muted-foreground ml-2">{t('createModal.current')}</span>
+                              )}
+                            </ComboboxItem>
+                          ))}
+                        </ComboboxGroup>
+                      )}
+                      {filteredRemoteBranches.length > 0 && (
+                        <ComboboxGroup>
+                          <ComboboxLabel>Remote</ComboboxLabel>
+                          {filteredRemoteBranches.map((b) => (
+                            <ComboboxItem key={b} value={b}>
+                              {b}
+                            </ComboboxItem>
+                          ))}
+                        </ComboboxGroup>
+                      )}
                     </ComboboxList>
                   </ComboboxContent>
                 </Combobox>

@@ -24,6 +24,7 @@ interface FileTreeResponse {
 
 interface BranchListing {
   branches: string[]
+  remoteBranches: string[]
   current: string
   defaultBranch: string
 }

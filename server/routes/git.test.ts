@@ -2,6 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import { createTestGitRepo, createTestWorktree, type TestGitRepo } from '../__tests__/fixtures/git'
 import { createTestApp } from '../__tests__/fixtures/app'
 import { setupTestEnv, type TestEnv } from '../__tests__/utils/env'
+import { execSync } from 'node:child_process'
 import { mkdtempSync, rmSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -87,6 +88,62 @@ describe('Git Routes', () => {
         expect(body.error).toContain('not a git repository')
       } finally {
         rmSync(notGitDir, { recursive: true, force: true })
+      }
+    })
+
+    test('returns empty remoteBranches when no remote configured', async () => {
+      const { get } = createTestApp()
+      const res = await get(`/api/git/branches?repo=${repo.path}`)
+      const body = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(body.remoteBranches).toEqual([])
+    })
+
+    test('returns remote branches when remote exists', async () => {
+      // Create a bare clone to serve as remote
+      const barePath = mkdtempSync(join(tmpdir(), 'fulcrum-bare-'))
+      rmSync(barePath, { recursive: true })
+
+      try {
+        execSync(`git clone --bare "${repo.path}" "${barePath}"`, { encoding: 'utf-8' })
+        repo.git(`remote add origin "${barePath}"`)
+        repo.git('fetch origin')
+
+        const { get } = createTestApp()
+        const res = await get(`/api/git/branches?repo=${repo.path}`)
+        const body = await res.json()
+
+        expect(res.status).toBe(200)
+        expect(body.remoteBranches).toBeInstanceOf(Array)
+        expect(body.remoteBranches.length).toBeGreaterThan(0)
+        expect(body.remoteBranches.some((b: string) => b.startsWith('origin/'))).toBe(true)
+      } finally {
+        rmSync(barePath, { recursive: true, force: true })
+      }
+    })
+
+    test('filters out HEAD pointer from remote branches', async () => {
+      // Create a bare clone to serve as remote
+      const barePath = mkdtempSync(join(tmpdir(), 'fulcrum-bare-'))
+      rmSync(barePath, { recursive: true })
+
+      try {
+        execSync(`git clone --bare "${repo.path}" "${barePath}"`, { encoding: 'utf-8' })
+        repo.git(`remote add origin "${barePath}"`)
+        repo.git('fetch origin')
+
+        const { get } = createTestApp()
+        const res = await get(`/api/git/branches?repo=${repo.path}`)
+        const body = await res.json()
+
+        expect(res.status).toBe(200)
+        // Should not contain any "HEAD -> ..." entries
+        for (const branch of body.remoteBranches) {
+          expect(branch).not.toContain(' -> ')
+        }
+      } finally {
+        rmSync(barePath, { recursive: true, force: true })
       }
     })
   })

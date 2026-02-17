@@ -16,7 +16,9 @@ import { Field, FieldGroup, FieldLabel, FieldDescription } from '@/components/ui
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
@@ -438,14 +440,29 @@ export function InitializeWorktreeTaskModal({ task, open, onOpenChange }: Initia
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    {branchData?.branches.map((b) => (
-                      <SelectItem key={b} value={b}>
-                        {b}
-                        {b === branchData.current && (
-                          <span className="text-muted-foreground ml-2">(current)</span>
-                        )}
-                      </SelectItem>
-                    ))}
+                    {branchData?.branches && branchData.branches.length > 0 && (
+                      <SelectGroup>
+                        {(branchData.remoteBranches?.length ?? 0) > 0 && <SelectLabel>Local</SelectLabel>}
+                        {branchData.branches.map((b) => (
+                          <SelectItem key={b} value={b}>
+                            {b}
+                            {b === branchData.current && (
+                              <span className="text-muted-foreground ml-2">(current)</span>
+                            )}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    )}
+                    {(branchData?.remoteBranches?.length ?? 0) > 0 && (
+                      <SelectGroup>
+                        <SelectLabel>Remote</SelectLabel>
+                        {branchData!.remoteBranches.map((b) => (
+                          <SelectItem key={b} value={b}>
+                            {b}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    )}
                   </SelectContent>
                 </Select>
               </Field>

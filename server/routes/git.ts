@@ -259,11 +259,28 @@ app.get('/branches', (c) => {
       current = branches[0] || 'main'
     }
 
+    // Get remote tracking branches (graceful failure for repos without remotes)
+    let remoteBranches: string[] = []
+    try {
+      const remoteBranchOutput = execSync('git branch -r', {
+        cwd: repoPath,
+        encoding: 'utf-8',
+      })
+      remoteBranches = remoteBranchOutput
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+        .filter((line) => !line.includes(' -> ')) // Filter "origin/HEAD -> origin/main"
+    } catch {
+      // No remotes configured or fetch failed — continue with local only
+    }
+
     // Get the default branch (main/master)
     const defaultBranch = getDefaultBranch(repoPath)
 
     return c.json({
       branches,
+      remoteBranches,
       current,
       defaultBranch,
     })
