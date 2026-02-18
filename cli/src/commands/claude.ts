@@ -10,6 +10,8 @@ import { globalArgs } from './shared'
 // @ts-expect-error - Bun text import
 import MARKETPLACE_JSON from '../../../plugins/fulcrum/.claude-plugin/marketplace.json' with { type: 'text' }
 // @ts-expect-error - Bun text import
+import PLUGIN_JSON from '../../../plugins/fulcrum/.claude-plugin/plugin.json' with { type: 'text' }
+// @ts-expect-error - Bun text import
 import HOOKS_JSON from '../../../plugins/fulcrum/hooks/hooks.json' with { type: 'text' }
 // @ts-expect-error - Bun text import
 import MCP_JSON from '../../../plugins/fulcrum/.mcp.json' with { type: 'text' }
@@ -31,6 +33,7 @@ const PLUGIN_ID = `${PLUGIN_NAME}@${MARKETPLACE_NAME}`
 // Plugin files to copy to marketplace directory
 const PLUGIN_FILES: Array<{ path: string; content: string }> = [
   { path: '.claude-plugin/marketplace.json', content: MARKETPLACE_JSON },
+  { path: '.claude-plugin/plugin.json', content: PLUGIN_JSON },
   { path: 'hooks/hooks.json', content: HOOKS_JSON },
   { path: '.mcp.json', content: MCP_JSON },
   { path: 'commands/pr.md', content: CMD_PR },
