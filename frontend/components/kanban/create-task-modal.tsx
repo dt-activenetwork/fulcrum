@@ -32,6 +32,8 @@ import {
   ComboboxList,
   ComboboxItem,
   ComboboxEmpty,
+  ComboboxGroup,
+  ComboboxLabel,
 } from '@/components/ui/combobox'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { TaskAdd01Icon, Folder01Icon, Cancel01Icon, Attachment01Icon, Link01Icon, Add01Icon, Tick01Icon, PinIcon, PinOffIcon } from '@hugeicons/core-free-icons'
@@ -148,6 +150,7 @@ export function CreateTaskModal({ open: controlledOpen, onOpenChange, defaultRep
   const addTaskLink = useAddTaskLink()
   const formRef = useRef<HTMLFormElement>(null)
   const attachmentInputRef = useRef<HTMLInputElement>(null)
+  const hasInitializedRef = useRef(false)
   const { data: worktreeBasePath } = useWorktreeBasePath()
   const { data: scratchBasePath } = useScratchBasePath()
   const { data: defaultGitReposDir } = useDefaultGitReposDir()
@@ -208,12 +211,18 @@ export function CreateTaskModal({ open: controlledOpen, onOpenChange, defaultRep
     )
   }, [repositories, repoSearchQuery, selectedRepo])
 
-  const filteredBranches = useMemo(() => {
-    if (!branchData?.branches) return []
-    if (!branchSearchQuery.trim() || branchSearchQuery === baseBranch) return branchData.branches
+  const { filteredLocalBranches, filteredRemoteBranches } = useMemo(() => {
+    const local = branchData?.branches ?? []
+    const remote = branchData?.remoteBranches ?? []
+    if (!branchSearchQuery.trim() || branchSearchQuery === baseBranch) {
+      return { filteredLocalBranches: local, filteredRemoteBranches: remote }
+    }
     const query = branchSearchQuery.toLowerCase()
-    return branchData.branches.filter((b) => b.toLowerCase().includes(query))
-  }, [branchData?.branches, branchSearchQuery, baseBranch])
+    return {
+      filteredLocalBranches: local.filter((b) => b.toLowerCase().includes(query)),
+      filteredRemoteBranches: remote.filter((b) => b.toLowerCase().includes(query)),
+    }
+  }, [branchData?.branches, branchData?.remoteBranches, branchSearchQuery, baseBranch])
 
   // Set default tab based on whether repositories exist
   useEffect(() => {
@@ -226,57 +235,69 @@ export function CreateTaskModal({ open: controlledOpen, onOpenChange, defaultRep
 
   // Initialize with default repository when modal opens, or auto-select most recently used
   useEffect(() => {
-    if (open) {
-      // Set task defaults from settings
-      if (defaultTaskType) {
-        setTaskType(defaultTaskType)
-      }
-      if (defaultStartImmediately !== undefined) {
-        setStartImmediately(defaultStartImmediately)
-      }
+    if (!open) {
+      hasInitializedRef.current = false
+      return
+    }
 
-      // Determine which repository will be selected
-      const selectedRepo = defaultRepository ?? (repositories && repositories.length > 0 ? repositories[0] : null)
+    // Only initialize once per modal session
+    // (prevents background refetches of repositories from resetting user's selection)
+    if (hasInitializedRef.current) return
 
-      // Find the project for this repository (for config fallback)
-      const repoProject = selectedRepo && projects
-        ? projects.find((p) => p.repositories.some((r) => r.id === selectedRepo.id))
-        : null
+    // Wait for repositories data before initializing
+    if (!repositories) return
 
-      // Set agent priority: repo -> project -> global -> 'claude'
-      if (selectedRepo?.defaultAgent) {
-        setAgent(selectedRepo.defaultAgent)
-      } else if (repoProject?.defaultAgent) {
-        setAgent(repoProject.defaultAgent)
-      } else if (defaultAgent) {
-        setAgent(defaultAgent)
-      }
+    hasInitializedRef.current = true
 
-      // Set OpenCode model: repo -> project -> global -> null
-      if (selectedRepo?.opencodeModel) {
-        setOpencodeModel(selectedRepo.opencodeModel)
-      } else if (repoProject?.opencodeModel) {
-        setOpencodeModel(repoProject.opencodeModel)
-      } else if (globalOpencodeModel) {
-        setOpencodeModel(globalOpencodeModel)
-      } else {
-        setOpencodeModel(null)
-      }
+    // Set task defaults from settings
+    if (defaultTaskType) {
+      setTaskType(defaultTaskType)
+    }
+    if (defaultStartImmediately !== undefined) {
+      setStartImmediately(defaultStartImmediately)
+    }
 
-      if (defaultRepository) {
-        // Use provided default repository
-        setSelectedRepoId(defaultRepository.id)
-        setRepoPath(defaultRepository.path)
-        setRepoSearchQuery(defaultRepository.displayName)
-        setRepoTab('saved')
-      } else if (repositories && repositories.length > 0) {
-        // Auto-select first repository (most recently used due to sorting)
-        const firstRepo = repositories[0]
-        setSelectedRepoId(firstRepo.id)
-        setRepoPath(firstRepo.path)
-        setRepoSearchQuery(firstRepo.displayName)
-        setRepoTab('saved')
-      }
+    // Determine which repository will be selected
+    const selectedRepo = defaultRepository ?? (repositories.length > 0 ? repositories[0] : null)
+
+    // Find the project for this repository (for config fallback)
+    const repoProject = selectedRepo && projects
+      ? projects.find((p) => p.repositories.some((r) => r.id === selectedRepo.id))
+      : null
+
+    // Set agent priority: repo -> project -> global -> 'claude'
+    if (selectedRepo?.defaultAgent) {
+      setAgent(selectedRepo.defaultAgent)
+    } else if (repoProject?.defaultAgent) {
+      setAgent(repoProject.defaultAgent)
+    } else if (defaultAgent) {
+      setAgent(defaultAgent)
+    }
+
+    // Set OpenCode model: repo -> project -> global -> null
+    if (selectedRepo?.opencodeModel) {
+      setOpencodeModel(selectedRepo.opencodeModel)
+    } else if (repoProject?.opencodeModel) {
+      setOpencodeModel(repoProject.opencodeModel)
+    } else if (globalOpencodeModel) {
+      setOpencodeModel(globalOpencodeModel)
+    } else {
+      setOpencodeModel(null)
+    }
+
+    if (defaultRepository) {
+      // Use provided default repository
+      setSelectedRepoId(defaultRepository.id)
+      setRepoPath(defaultRepository.path)
+      setRepoSearchQuery(defaultRepository.displayName)
+      setRepoTab('saved')
+    } else if (repositories.length > 0) {
+      // Auto-select first repository (most recently used due to sorting)
+      const firstRepo = repositories[0]
+      setSelectedRepoId(firstRepo.id)
+      setRepoPath(firstRepo.path)
+      setRepoSearchQuery(firstRepo.displayName)
+      setRepoTab('saved')
     }
   }, [open, defaultRepository, repositories, projects, defaultAgent, globalOpencodeModel, defaultTaskType, defaultStartImmediately])
 
@@ -285,7 +306,8 @@ export function CreateTaskModal({ open: controlledOpen, onOpenChange, defaultRep
     if (branchData) {
       const repo = repositories?.find(r => r.id === selectedRepoId)
       const preferred = repo?.lastBaseBranch
-      const branch = preferred && branchData.branches.includes(preferred)
+      const allBranches = [...branchData.branches, ...(branchData.remoteBranches ?? [])]
+      const branch = preferred && allBranches.includes(preferred)
         ? preferred
         : branchData.defaultBranch || branchData.branches[0] || 'main'
       setBaseBranch(branch)
@@ -956,14 +978,29 @@ export function CreateTaskModal({ open: controlledOpen, onOpenChange, defaultRep
                   <ComboboxContent>
                     <ComboboxList>
                       <ComboboxEmpty>{t('createModal.noBranchesFound')}</ComboboxEmpty>
-                      {filteredBranches.map((b) => (
-                        <ComboboxItem key={b} value={b}>
-                          {b}
-                          {b === branchData?.current && (
-                            <span className="text-muted-foreground ml-2">{t('createModal.current')}</span>
-                          )}
-                        </ComboboxItem>
-                      ))}
+                      {filteredLocalBranches.length > 0 && (
+                        <ComboboxGroup>
+                          {filteredRemoteBranches.length > 0 && <ComboboxLabel>Local</ComboboxLabel>}
+                          {filteredLocalBranches.map((b) => (
+                            <ComboboxItem key={b} value={b}>
+                              {b}
+                              {b === branchData?.current && (
+                                <span className="text-muted-foreground ml-2">{t('createModal.current')}</span>
+                              )}
+                            </ComboboxItem>
+                          ))}
+                        </ComboboxGroup>
+                      )}
+                      {filteredRemoteBranches.length > 0 && (
+                        <ComboboxGroup>
+                          <ComboboxLabel>Remote</ComboboxLabel>
+                          {filteredRemoteBranches.map((b) => (
+                            <ComboboxItem key={b} value={b}>
+                              {b}
+                            </ComboboxItem>
+                          ))}
+                        </ComboboxGroup>
+                      )}
                     </ComboboxList>
                   </ComboboxContent>
                 </Combobox>

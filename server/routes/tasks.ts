@@ -400,6 +400,11 @@ app.post('/', async (c) => {
         .set({ lastUsedAt: now, lastBaseBranch: body.baseBranch || null, updatedAt: now })
         .where(eq(repositories.path, body.repoPath))
         .run()
+    } else if (body.repositoryId && body.baseBranch) {
+      db.update(repositories)
+        .set({ lastUsedAt: now, lastBaseBranch: body.baseBranch, updatedAt: now })
+        .where(eq(repositories.id, body.repositoryId))
+        .run()
     }
 
     const created = db.select().from(tasks).where(eq(tasks.id, newTask.id)).get()

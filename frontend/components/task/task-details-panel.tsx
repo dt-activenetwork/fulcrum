@@ -2,6 +2,15 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { DescriptionTextarea } from '@/components/ui/description-textarea'
 import { DatePickerPopover } from '@/components/ui/date-picker-popover'
 import { TimeEstimatePicker } from '@/components/task/time-estimate-picker'
@@ -13,6 +22,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { Cancel01Icon, GitPullRequestIcon, Link02Icon, Loading03Icon } from '@hugeicons/core-free-icons'
 import { useUpdateTask } from '@/hooks/use-tasks'
 import { useAddTaskTag, useRemoveTaskTag } from '@/hooks/use-tags'
+import { useBranches } from '@/hooks/use-filesystem'
 import { useIsOverdue } from '@/hooks/use-date-utils'
 import { openExternalUrl } from '@/lib/editor-url'
 import type { Task, TaskPriority } from '@/types'
@@ -37,6 +47,7 @@ export function TaskDetailsPanel({ task }: TaskDetailsPanelProps) {
   const [isEditingPrUrl, setIsEditingPrUrl] = useState(false)
 
   const isWorktreeTask = !!task.worktreePath
+  const { data: branchData, isLoading: branchesLoading } = useBranches(isWorktreeTask ? (task.repoPath || null) : null)
 
   const handleSaveDescription = () => {
     if (editedDescription !== (task.description || '')) {
@@ -118,6 +129,14 @@ export function TaskDetailsPanel({ task }: TaskDetailsPanelProps) {
       setPrUrlInput(task.prUrl || '')
       setIsEditingPrUrl(false)
     }
+  }
+
+  const handleBaseBranchChange = (newBranch: string | null) => {
+    if (!newBranch) return
+    updateTask.mutate({
+      taskId: task.id,
+      updates: { baseBranch: newBranch },
+    })
   }
 
   const handlePinnedChange = (checked: boolean) => {
@@ -376,6 +395,53 @@ export function TaskDetailsPanel({ task }: TaskDetailsPanelProps) {
                 Link PR
               </Button>
             )}
+          </div>
+        )}
+
+        {/* Base Branch - only for worktree tasks */}
+        {isWorktreeTask && (
+          <div className="rounded-lg border bg-card p-4">
+            <h3 className="text-sm font-medium text-muted-foreground mb-2">Base Branch</h3>
+            <Select
+              value={task.baseBranch || ''}
+              onValueChange={handleBaseBranchChange}
+              disabled={branchesLoading}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue>
+                  {task.baseBranch || (
+                    <span className="text-muted-foreground">
+                      {branchesLoading ? 'Loading branches...' : 'Select branch'}
+                    </span>
+                  )}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {branchData?.branches && branchData.branches.length > 0 && (
+                  <SelectGroup>
+                    {(branchData.remoteBranches?.length ?? 0) > 0 && <SelectLabel>Local</SelectLabel>}
+                    {branchData.branches.map((b) => (
+                      <SelectItem key={b} value={b}>
+                        {b}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+                {(branchData?.remoteBranches?.length ?? 0) > 0 && (
+                  <SelectGroup>
+                    <SelectLabel>Remote</SelectLabel>
+                    {branchData!.remoteBranches.map((b) => (
+                      <SelectItem key={b} value={b}>
+                        {b}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1.5">
+              Used for diff comparisons, rebase, merge, and PR creation.
+            </p>
           </div>
         )}
 

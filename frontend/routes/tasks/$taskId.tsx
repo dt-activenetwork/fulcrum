@@ -680,6 +680,11 @@ function TaskView() {
                     {task.repoName}
                   </span>
                 )}
+                {task.baseBranch && (
+                  <span className="text-muted-foreground/70 font-mono truncate">
+                    from {task.baseBranch}
+                  </span>
+                )}
                 <div className="ml-auto">
                   <GitStatusBadge worktreePath={task.worktreePath} />
                 </div>
@@ -767,6 +772,11 @@ function TaskView() {
                 )}
                 <HugeiconsIcon icon={GitBranchIcon} size={12} strokeWidth={2} />
                 <span className="font-mono">{task.branch}</span>
+                {task.baseBranch && (
+                  <span className="text-muted-foreground/70 font-mono">
+                    from {task.baseBranch}
+                  </span>
+                )}
                 {task.prUrl && (
                   <>
                     <span className="text-muted-foreground/50">•</span>
