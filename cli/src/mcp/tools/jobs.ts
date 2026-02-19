@@ -72,7 +72,7 @@ export const registerJobTools: ToolRegistrar = (server, client) => {
       schedule: z.string().describe('systemd OnCalendar schedule (e.g., "daily", "*-*-* 09:00:00", "Mon..Fri 09:00")'),
       command: z.string().describe('Command to execute'),
       workingDirectory: z.optional(z.string()).describe('Working directory for the command'),
-      environment: z.optional(z.record(z.string())).describe('Environment variables as key-value pairs'),
+      environment: z.optional(z.record(z.string(), z.string())).describe('Environment variables as key-value pairs'),
       persistent: z.optional(z.boolean()).describe('Run missed executions on next boot (default: true)'),
     },
     async ({ name, description, schedule, command, workingDirectory, environment, persistent }) => {
@@ -103,7 +103,7 @@ export const registerJobTools: ToolRegistrar = (server, client) => {
       schedule: z.optional(z.string()).describe('New schedule'),
       command: z.optional(z.string()).describe('New command'),
       workingDirectory: z.optional(z.string()).describe('New working directory'),
-      environment: z.optional(z.record(z.string())).describe('New environment variables'),
+      environment: z.optional(z.record(z.string(), z.string())).describe('New environment variables'),
       persistent: z.optional(z.boolean()).describe('Run missed executions on next boot'),
     },
     async ({ name, description, schedule, command, workingDirectory, environment, persistent }) => {
