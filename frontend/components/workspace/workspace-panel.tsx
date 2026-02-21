@@ -99,8 +99,8 @@ export function WorkspacePanel({
 
   // Find or create terminal when workspace tab is active
   useEffect(() => {
-    if (!connected || !repoPath || !terminalsLoaded || activeTab !== 'workspace' || !xtermReady) {
-      log.repoTerminal.debug('find/create: waiting', { connected, repoPath, terminalsLoaded, activeTab, xtermReady })
+    if (!connected || !repoPath || !terminalsLoaded || activeTab !== 'workspace') {
+      log.repoTerminal.debug('find/create: waiting', { connected, repoPath, terminalsLoaded, activeTab })
       return
     }
 
@@ -113,19 +113,18 @@ export function WorkspacePanel({
     }
 
     // Create terminal only once
-    if (!createdTerminalRef.current && termRef.current) {
+    if (!createdTerminalRef.current) {
       createdTerminalRef.current = true
       setIsCreatingTerminal(true)
-      const { cols, rows } = termRef.current
-      log.repoTerminal.info('creating terminal', { name: repoDisplayName, cwd: repoPath, cols, rows })
+      log.repoTerminal.info('creating terminal', { name: repoDisplayName, cwd: repoPath, cols: 80, rows: 24 })
       createTerminal({
         name: repoDisplayName,
-        cols,
-        rows,
+        cols: 80,
+        rows: 24,
         cwd: repoPath,
       })
     }
-  }, [connected, repoPath, repoDisplayName, terminalsLoaded, terminals, activeTab, createTerminal, xtermReady])
+  }, [connected, repoPath, repoDisplayName, terminalsLoaded, terminals, activeTab, createTerminal])
 
   // Update terminalId when terminal appears in list
   useEffect(() => {
