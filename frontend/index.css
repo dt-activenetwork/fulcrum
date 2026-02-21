@@ -11,7 +11,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-    /* New theme colors - Pure black/white with purple accent */
+    /* New theme colors - Pure black/white with blue accent */
     --background: oklch(1.0000 0 0);
     --foreground: oklch(0.0000 0 0);
     --card: oklch(0.9850 0 0);
@@ -93,7 +93,7 @@
 }
 
 .dark {
-    /* New theme colors - Pure black/white with purple accent */
+    /* New theme colors - Pure black/white with blue accent */
     --background: oklch(0.0000 0 0);
     --foreground: oklch(1.0000 0 0);
     --card: oklch(0.1400 0 0);
