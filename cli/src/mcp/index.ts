@@ -12,7 +12,7 @@ export async function runMcpServer(urlOverride?: string, portOverride?: string) 
 
   const server = new McpServer({
     name: 'fulcrum',
-    version: '4.4.8',
+    version: '4.4.9',
   })
 
   registerTools(server, client)
