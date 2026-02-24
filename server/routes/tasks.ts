@@ -6,7 +6,6 @@ import { detectLinkType } from '../lib/link-utils'
 import { execSync } from 'child_process'
 import * as fs from 'fs'
 import * as path from 'path'
-import { glob } from 'glob'
 import { getFulcrumDir, getScratchBasePath } from '../lib/settings'
 import {
   getPTYManager,
@@ -17,39 +16,7 @@ import { broadcast } from '../websocket/terminal-ws'
 import { updateTaskStatus } from '../services/task-status'
 import { reindexTaskFTS } from '../services/search-service'
 import { log } from '../lib/logger'
-
-// Helper to create git worktree
-function createGitWorktree(
-  repoPath: string,
-  worktreePath: string,
-  branch: string,
-  baseBranch: string
-): { success: boolean; error?: string } {
-  try {
-    // Ensure parent directory exists
-    const worktreeParent = path.dirname(worktreePath)
-    if (!fs.existsSync(worktreeParent)) {
-      fs.mkdirSync(worktreeParent, { recursive: true })
-    }
-
-    // Create the worktree with a new branch based on baseBranch
-    try {
-      execSync(`git worktree add -b "${branch}" "${worktreePath}" "${baseBranch}"`, {
-        cwd: repoPath,
-        encoding: 'utf-8',
-      })
-    } catch {
-      // Branch might already exist, try without -b
-      execSync(`git worktree add "${worktreePath}" "${branch}"`, {
-        cwd: repoPath,
-        encoding: 'utf-8',
-      })
-    }
-    return { success: true }
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : 'Failed to create worktree' }
-  }
-}
+import { createGitWorktree, copyFilesToWorktree } from '../lib/git-utils'
 
 // Helper to delete git worktree
 function deleteGitWorktree(repoPath: string, worktreePath: string): void {
@@ -120,38 +87,6 @@ function deleteTaskAttachments(taskId: string): void {
   const uploadDir = getTaskUploadsDir(taskId)
   if (fs.existsSync(uploadDir)) {
     fs.rmSync(uploadDir, { recursive: true, force: true })
-  }
-}
-
-// Copy files to worktree based on glob patterns
-function copyFilesToWorktree(repoPath: string, worktreePath: string, patterns: string): void {
-  const patternList = patterns
-    .split(',')
-    .map((p) => p.trim())
-    .filter(Boolean)
-
-  for (const pattern of patternList) {
-    try {
-      const files = glob.sync(pattern, { cwd: repoPath, nodir: true })
-      for (const file of files) {
-        const srcPath = path.join(repoPath, file)
-        const destPath = path.join(worktreePath, file)
-        const destDir = path.dirname(destPath)
-
-        // Skip if file already exists (don't overwrite)
-        if (fs.existsSync(destPath)) continue
-
-        // Create destination directory if needed
-        if (!fs.existsSync(destDir)) {
-          fs.mkdirSync(destDir, { recursive: true })
-        }
-
-        fs.copyFileSync(srcPath, destPath)
-      }
-    } catch (err) {
-      log.api.error('Failed to copy files matching pattern', { pattern, error: String(err) })
-      // Continue with other patterns
-    }
   }
 }
 

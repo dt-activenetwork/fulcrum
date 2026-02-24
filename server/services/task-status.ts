@@ -6,71 +6,12 @@ import { sendNotification } from './notification-service'
 import { killClaudeInTerminalsForWorktree } from '../terminal/pty-instance'
 import { log } from '../lib/logger'
 import { getWorktreeBasePath, getScratchBasePath } from '../lib/settings'
+import { createGitWorktree, copyFilesToWorktree } from '../lib/git-utils'
 import { execSync } from 'child_process'
 import * as fs from 'fs'
 import * as path from 'path'
-import { glob } from 'glob'
 import { calculateNextDueDate, getTodayInTimezone } from '../../shared/date-utils'
 import type { RecurrenceRule } from '../../shared/types'
-
-// Helper to create git worktree (copied from tasks.ts for use in status transitions)
-function createGitWorktree(
-  repoPath: string,
-  worktreePath: string,
-  branch: string,
-  baseBranch: string
-): { success: boolean; error?: string } {
-  try {
-    const worktreeParent = path.dirname(worktreePath)
-    if (!fs.existsSync(worktreeParent)) {
-      fs.mkdirSync(worktreeParent, { recursive: true })
-    }
-
-    try {
-      execSync(`git worktree add -b "${branch}" "${worktreePath}" "${baseBranch}"`, {
-        cwd: repoPath,
-        encoding: 'utf-8',
-      })
-    } catch {
-      execSync(`git worktree add "${worktreePath}" "${branch}"`, {
-        cwd: repoPath,
-        encoding: 'utf-8',
-      })
-    }
-    return { success: true }
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : 'Failed to create worktree' }
-  }
-}
-
-// Helper to copy files to worktree
-function copyFilesToWorktree(repoPath: string, worktreePath: string, patterns: string): void {
-  const patternList = patterns
-    .split(',')
-    .map((p) => p.trim())
-    .filter(Boolean)
-
-  for (const pattern of patternList) {
-    try {
-      const files = glob.sync(pattern, { cwd: repoPath, nodir: true })
-      for (const file of files) {
-        const srcPath = path.join(repoPath, file)
-        const destPath = path.join(worktreePath, file)
-        const destDir = path.dirname(destPath)
-
-        if (fs.existsSync(destPath)) continue
-
-        if (!fs.existsSync(destDir)) {
-          fs.mkdirSync(destDir, { recursive: true })
-        }
-
-        fs.copyFileSync(srcPath, destPath)
-      }
-    } catch (err) {
-      log.api.error('Failed to copy files matching pattern', { pattern, error: String(err) })
-    }
-  }
-}
 
 // Generate worktree path and branch name for a task
 function generateWorktreeInfo(

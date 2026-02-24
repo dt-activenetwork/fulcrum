@@ -4,6 +4,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 import { triggerAutoDeployForRepo } from '../services/git-watcher'
+import { fetchIfRemoteRef } from '../lib/git-utils'
 
 // Execute git command and return output
 function gitExec(cwd: string, args: string, timeoutMs = 30_000): string {
@@ -386,6 +387,9 @@ app.post('/worktree', async (c) => {
     if (!fs.existsSync(worktreeParent)) {
       fs.mkdirSync(worktreeParent, { recursive: true })
     }
+
+    // Fetch remote ref if baseBranch looks like one (e.g. origin/develop)
+    fetchIfRemoteRef(repoPath, baseBranch)
 
     // Create the worktree with a new branch based on baseBranch
     try {
