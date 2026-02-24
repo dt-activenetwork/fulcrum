@@ -132,10 +132,15 @@ export function InitializeWorktreeTaskModal({ task, open, onOpenChange }: Initia
     }
   }, [repositories])
 
-  // Initialize with first repository when modal opens
+  // Initialize with task's saved repository (or first repository) when modal opens
   useEffect(() => {
     if (open) {
-      const selectedRepo = repositories && repositories.length > 0 ? repositories[0] : null
+      // Use task's saved repositoryId if available, otherwise fall back to first repo
+      const selectedRepo = repositories && repositories.length > 0
+        ? (task.repositoryId
+            ? repositories.find(r => r.id === task.repositoryId) ?? repositories[0]
+            : repositories[0])
+        : null
 
       // Find the project for this repository (for config fallback)
       const repoProject = selectedRepo && projects
@@ -163,10 +168,12 @@ export function InitializeWorktreeTaskModal({ task, open, onOpenChange }: Initia
       }
 
       if (repositories && repositories.length > 0) {
-        const firstRepo = repositories[0]
-        setSelectedRepoId(firstRepo.id)
-        setRepoPath(firstRepo.path)
-        setRepoSearchQuery(firstRepo.displayName)
+        const targetRepo = task.repositoryId
+          ? repositories.find(r => r.id === task.repositoryId) ?? repositories[0]
+          : repositories[0]
+        setSelectedRepoId(targetRepo.id)
+        setRepoPath(targetRepo.path)
+        setRepoSearchQuery(targetRepo.displayName)
         setRepoTab('saved')
       }
 
@@ -177,7 +184,7 @@ export function InitializeWorktreeTaskModal({ task, open, onOpenChange }: Initia
         setAiMode('default')
       }
     }
-  }, [open, repositories, projects, defaultAgent, globalOpencodeModel, task.description])
+  }, [open, repositories, projects, defaultAgent, globalOpencodeModel, task.description, task.repositoryId])
 
   // Set default base branch when branches are loaded
   useEffect(() => {
