@@ -37,6 +37,7 @@ export function useDiffOptions(taskId: string) {
 
   return {
     options: viewState.diffOptions,
+    collapsedSet,
     setOption: <K extends keyof DiffOptions>(key: K, value: DiffOptions[K]) => {
       setDiffOptions({ [key]: value })
     },

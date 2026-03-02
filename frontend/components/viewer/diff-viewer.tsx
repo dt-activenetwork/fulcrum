@@ -114,7 +114,7 @@ interface DiffViewerProps {
 }
 
 export function DiffViewer({ taskId, worktreePath, baseBranch }: DiffViewerProps) {
-  const { options, setOption, toggleFileCollapse, collapseAll, expandAll } = useDiffOptions(taskId)
+  const { options, collapsedSet, setOption, toggleFileCollapse, collapseAll, expandAll } = useDiffOptions(taskId)
   const { wrap, ignoreWhitespace, includeUntracked, collapsedFiles } = options
   const { data, isLoading, error } = useGitDiff(worktreePath, { ignoreWhitespace, includeUntracked, baseBranch })
 
@@ -122,8 +122,6 @@ export function DiffViewer({ taskId, worktreePath, baseBranch }: DiffViewerProps
     if (!data?.diff) return []
     return parseDiff(data.diff)
   }, [data?.diff])
-
-  const collapsedSet = useMemo(() => new Set(collapsedFiles), [collapsedFiles])
 
   const allFilePaths = useMemo(() => files.map(f => f.path), [files])
   const allCollapsed = files.length > 0 && collapsedFiles.length === files.length
@@ -154,6 +152,11 @@ export function DiffViewer({ taskId, worktreePath, baseBranch }: DiffViewerProps
       flatRows[index].kind === 'file-header' ? FILE_HEADER_HEIGHT : DIFF_LINE_HEIGHT,
     overscan: 40,
   })
+
+  // Invalidate cached row measurements when wrap changes
+  useEffect(() => {
+    virtualizer.measure()
+  }, [wrap, virtualizer])
 
   // Keyboard shortcut: Shift+C to toggle collapse/expand all
   useEffect(() => {

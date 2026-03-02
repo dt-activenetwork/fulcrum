@@ -37,7 +37,8 @@ async function gitExecAsync(cwd: string, args: string[], timeoutMs = 30_000): Pr
     stderr: 'pipe',
   })
 
-  const timeoutId = setTimeout(() => proc.kill(), timeoutMs)
+  let timedOut = false
+  const timeoutId = setTimeout(() => { timedOut = true; proc.kill() }, timeoutMs)
 
   try {
     const [stdout, stderr] = await Promise.all([
@@ -47,6 +48,9 @@ async function gitExecAsync(cwd: string, args: string[], timeoutMs = 30_000): Pr
     const exitCode = await proc.exited
     clearTimeout(timeoutId)
 
+    if (timedOut) {
+      throw new Error(`Git command timed out after ${timeoutMs}ms: git ${args.join(' ')}`)
+    }
     if (exitCode !== 0) {
       throw new Error(stderr.trim() || `git ${args.join(' ')} exited with code ${exitCode}`)
     }
@@ -503,30 +507,15 @@ app.get('/diff', async (c) => {
   }
 
   try {
-    // Get the diff
-    let diff = ''
-    try {
-      diff = await gitExecAsync(worktreePath, staged ? ['diff', '--cached', ...(ignoreWhitespace ? ['-w'] : [])] : ['diff', ...(ignoreWhitespace ? ['-w'] : [])])
-    } catch {
-      // No diff available
-      diff = ''
-    }
-
-    // Get status summary (10s timeout)
-    let status = ''
-    try {
-      status = await gitExecAsync(worktreePath, ['status', '--short'], 10_000)
-    } catch {
-      status = ''
-    }
-
-    // Get current branch
-    let branch = ''
-    try {
-      branch = await gitExecAsync(worktreePath, ['rev-parse', '--abbrev-ref', 'HEAD'])
-    } catch {
-      branch = 'unknown'
-    }
+    // Run independent git commands in parallel
+    const diffArgs = staged
+      ? ['diff', '--cached', ...(ignoreWhitespace ? ['-w'] : [])]
+      : ['diff', ...(ignoreWhitespace ? ['-w'] : [])]
+    const [diff, status, branch] = await Promise.all([
+      gitExecAsync(worktreePath, diffArgs).catch(() => ''),
+      gitExecAsync(worktreePath, ['status', '--short'], 10_000).catch(() => ''),
+      gitExecAsync(worktreePath, ['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => 'unknown'),
+    ])
 
     // If no local changes, get diff against base branch
     let branchDiff = ''
