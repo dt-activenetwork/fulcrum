@@ -244,7 +244,7 @@ export class TerminalSession {
       // Auto-dismiss Claude workspace trust prompt ("Yes, I trust this folder")
       if (!this.trustPromptHandled) {
         // Strip all ANSI escape sequences (CSI, OSC, etc.)
-        // eslint-disable-next-line no-control-regex
+        // eslint-disable-next-line no-control-regex, no-useless-escape
         const stripped = data.replace(/\x1b[\[\]()#?]*[0-9;]*[a-zA-Z~]/g, '').replace(/[\x00-\x09\x0b\x0c\x0e-\x1f]/g, '')
         this.recentOutput += stripped
         // Keep only the last 4KB

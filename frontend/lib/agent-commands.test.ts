@@ -30,10 +30,8 @@ describe('Agent Commands', () => {
         const cmd = buildAgentCommand('claude', { ...baseOptions, mode: 'plan' })
 
         expect(cmd).toContain('claude')
-        expect(cmd).toContain('--dangerously-skip-permissions')
-        // Plan mode is now handled via prompt instruction instead of --permission-mode plan
-        // to avoid trust prompt (see https://github.com/anthropics/claude-code/issues/17544)
-        expect(cmd).toContain('Enter plan mode before starting')
+        expect(cmd).toContain('--allow-dangerously-skip-permissions')
+        expect(cmd).toContain('--permission-mode plan')
       })
 
       test('includes additional options', () => {
